@@ -1,0 +1,10 @@
+pandas
+requests==2.32.3
+google-cloud-bigquery
+db-dtypes
+google-cloud-secret-manager
+google-cloud-storage
+gcp-utils-sds
+psutil
+fsspec
+gcsfs
