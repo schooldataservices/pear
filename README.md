@@ -44,3 +44,4 @@ This project ingests assignment data from the Edulastic API, normalizes and dedu
 - Python 3.12+
 - Google Cloud credentials with access to Secret Manager and GCS
 - See `requirements.txt` for Python dependencies
+- API docs are here https://docs.google.com/document/d/1OyXG4q9zF-W2mYW7wuGscxVeYStBmO5nF82gT2dfM04/edit?tab=t.0

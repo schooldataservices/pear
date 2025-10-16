@@ -106,6 +106,7 @@ def get_updated_assignments(username: str, password: str, date: int):
         if response.status_code == 200 and response.json() is not None:
             logging.info(f'Assignments retrieved successfully. Here is what has been updated within the last 24 hours: {response.json()}')
             return(pd.DataFrame(response.json(), columns=['assignment_id']))
+            # return(pd.DataFrame(response.json()))
 
         elif response.status_code == 401:
             print("⚠️ Unauthorized — check username, password, or permissions.")
