@@ -1,10 +1,10 @@
 
 
+import ast
+
 def transform_assignment_responses(df, client):
     temp = df[['test_type', 'assessment_id', 'assignment_name', 'standard_notation', 'student_sis_id', 'question_index', 'score', 'max_score', 'grading_status', 'timestamp']]
     temp = temp.loc[(temp['grading_status'] == 'GRADED') & (temp['test_type'].isin(['school common assessment', 'common assessment']))]
-
-    import ast
 
     temp['standard_notation'] = temp['standard_notation'].apply(
         lambda x: ast.literal_eval(x) if isinstance(x, str) else x

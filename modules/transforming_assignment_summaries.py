@@ -9,7 +9,10 @@ def transform_assignment_summaries(df, client):
 
     results = swap_student_ids(results, 'studentsisid', client)
 
-    results = results[results['assignment_name'].str.contains(r'test|assessment|interim', case=False, na=False)]
+    results = results[
+    results['assignment_name'].str.contains(r'test|assessment|interim', case=False, na=False)
+    & ~results['assignment_name'].str.contains(r'review', case=False, na=False)
+    ]
 
     return(results)
 

@@ -35,7 +35,12 @@ def main(year):
     logging.info(f'Here is the number of assignments since the beginning of the year {len(df)}')
 
 
-    assignment_id_list = df.assignment_id.to_list() #pass in list to func
+    assignment_id_list = df.assignment_id.to_list() + [
+    '68c0991821a3b97a63808f7a',
+    '689bb78d965cf7826eb6444d',
+    '68e5793913c3d26b49c17750'
+    ] #assignments that are missing from Pears assignment-list endpoint because they do not have standards attached.
+
     df_assignment_responses_raw = get_assignment_responses_call(username, password, assignment_id_list)
     df_ar_transformed = transform_assignment_responses(df_assignment_responses_raw, client)
     assignments_view = make_view_assignments(df_ar_transformed, year, client)

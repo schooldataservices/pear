@@ -2,8 +2,8 @@ import re
 import pandas as pd
 
 keywords = {
-    "algebra i": "Algebra I",
     "algebra ii": "Algebra II",
+    "algebra i": "Algebra I",
     "geometry": "Geometry",
     "science": "Science",
     "math": "Math"
@@ -18,9 +18,15 @@ def categorize_curriculum(name: str) -> str:
 
 
 def extract_unit(name: str):
-    match = re.search(r'unit\s*(\d+)', name.lower())
-    if match:
-        return f"Unit {match.group(1)}"
+    name_lower = name.lower()
+    # Try to match "unit <number>"
+    match_unit = re.search(r'unit\s*(\d+)', name_lower)
+    if match_unit:
+        return f"Unit {match_unit.group(1)}"
+    # Try to match "interim #<number>" or "interim <number>"
+    match_interim = re.search(r'interim\s*#?\s*(\d+)', name_lower)
+    if match_interim:
+        return f"Interim {match_interim.group(1)}"
     return None  # or "No Unit"
 
 # Function to assign performance level
@@ -92,6 +98,8 @@ def make_view_assignments(df, year, client):
 
     # Optional combined "Proficiency" column
     df['proficiency'] = df['performance_band_level'].astype(str) + " " + df['performance_band_label']
+
+    df = df.drop(columns=['score']) #drop old score column that is not a percent. Before changing percent_score name 
 
     df.rename(columns={'assignment_id': 'assessment_id', 
                 'timestamp': 'date_taken',
