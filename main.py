@@ -34,7 +34,6 @@ def main(year):
     df = collect_daily_assignments(username, password, delay_seconds=1)    #To get all asssignments going back to beginning of August 
     logging.info(f'Here is the number of assignments since the beginning of the year {len(df)}')
 
-
     assignment_id_list = df.assignment_id.to_list() + [
     '68c0991821a3b97a63808f7a',
     '689bb78d965cf7826eb6444d',
