@@ -1,5 +1,6 @@
 import re
 import pandas as pd
+import logging
 
 keywords = {
     "algebra ii": "Algebra II",
@@ -9,7 +10,19 @@ keywords = {
     "math": "Math"
 }
 
-def categorize_curriculum(name: str) -> str:
+# Assessment ID overrides for curriculum and unit mapping
+# These override the automatic categorization when assignment names are ambiguous
+assessment_overrides = {
+    "68b22e718bbeb32951baaddf": {"curriculum": "Chemistry", "unit": "Interim 1"},  # 10th Grade Science Interim #1
+    "690bc60f9f7d11ef8ccd4ace": {"curriculum": "Algebra II", "unit": "Unit 3"},  # Grade 11 Math Unit 3 Assessment*
+    "6917b5dd477a07bb7337dfe8": {"curriculum": "Geometry", "unit": "Unit 3"},  # Grade 10 Math Unit 3 Assessment
+}
+
+def categorize_curriculum(name: str, assessment_id: str = None) -> str:
+    # Check assessment_id override first
+    if assessment_id and assessment_id in assessment_overrides:
+        return assessment_overrides[assessment_id]["curriculum"]
+    
     name_lower = name.lower()
     for k, v in keywords.items():
         if k in name_lower:
@@ -17,7 +30,11 @@ def categorize_curriculum(name: str) -> str:
     return "Other"
 
 
-def extract_unit(name: str):
+def extract_unit(name: str, assessment_id: str = None):
+    # Check assessment_id override first
+    if assessment_id and assessment_id in assessment_overrides:
+        return assessment_overrides[assessment_id]["unit"]
+    
     name_lower = name.lower()
     # Try to match "unit <number>"
     match_unit = re.search(r'unit\s*(\d+)', name_lower)
@@ -49,8 +66,8 @@ def make_view_summaries(df, year, client):
     df['year'] = year
     df['test_type'] = 'assessment'
     df['standard_code'] = 'percent'
-    df['curriculum'] = df['assignment_name'].apply(categorize_curriculum)
-    df['unit'] = df['assignment_name'].apply(extract_unit)
+    df['curriculum'] = df.apply(lambda row: categorize_curriculum(row['assignment_name'], row['assessment_id']), axis=1)
+    df['unit'] = df.apply(lambda row: extract_unit(row['assignment_name'], row['assessment_id']), axis=1)
 
     # Apply the function
     df[['performance_band_level', 'performance_band_label']] = df['percent_score'].apply(
@@ -60,8 +77,7 @@ def make_view_summaries(df, year, client):
     # Optional combined "Proficiency" column
     df['proficiency'] = df['performance_band_level'].astype(str) + " " + df['performance_band_label']
 
-    df.rename(columns={'assignment_id': 'assessment_id', 
-                    'submitted_date': 'date_taken',
+    df.rename(columns={'submitted_date': 'date_taken',
                     'studentsisid': 'local_student_id',
                     'assignment_name': 'title',
                     'percent_score': 'score'}, inplace=True)
@@ -88,8 +104,8 @@ def make_view_assignments(df, year, client):
     df['data_source'] = 'pear'
     df['year'] = year
     df['test_type'] = 'assessment'
-    df['curriculum'] = df['assignment_name'].apply(categorize_curriculum)
-    df['unit'] = df['assignment_name'].apply(extract_unit)
+    df['curriculum'] = df.apply(lambda row: categorize_curriculum(row['assignment_name'], row['assessment_id']), axis=1)
+    df['unit'] = df.apply(lambda row: extract_unit(row['assignment_name'], row['assessment_id']), axis=1)
 
         # Apply the function
     df[['performance_band_level', 'performance_band_label']] = df['percent_score'].apply(
@@ -101,8 +117,7 @@ def make_view_assignments(df, year, client):
 
     df = df.drop(columns=['score']) #drop old score column that is not a percent. Before changing percent_score name 
 
-    df.rename(columns={'assignment_id': 'assessment_id', 
-                'timestamp': 'date_taken',
+    df.rename(columns={'timestamp': 'date_taken',
                 'student_sis_id': 'local_student_id',
                 'assignment_name': 'title',
                 'standard_notation': 'standard_code',
@@ -118,8 +133,22 @@ def make_view_assignments(df, year, client):
 
     temp['local_student_id'] = temp['local_student_id'].astype(str)
     df['local_student_id'] = df['local_student_id'].astype(str)
+    
+    # Log merge statistics
+    logging.info(f"Before merge: {len(df)} rows, {df['local_student_id'].nunique()} unique local_student_ids")
+    logging.info(f"Grade lookup table: {len(temp)} rows, {temp['local_student_id'].nunique()} unique local_student_ids")
+    
+    # Check for nulls before merge
+    null_ids_before = df['local_student_id'].isna().sum()
+    if null_ids_before > 0:
+        logging.warning(f"{null_ids_before} rows have null local_student_id before merge")
 
     df = pd.merge(df, temp, on='local_student_id', how='left')
+    
+    # Log merge results
+    matched_count = df['grade'].notna().sum()
+    unmatched_count = df['grade'].isna().sum()
+    logging.info(f"After merge: {matched_count} rows with grade, {unmatched_count} rows without grade (null)")
 
     df = df[['data_source', 'assessment_id', 'year', 'date_taken', 'grade', 'local_student_id', 'test_type', 'curriculum', 'unit', 'title', 'standard_code', 'score', 'performance_band_level', 'performance_band_label', 'proficiency']]
     return(df)
