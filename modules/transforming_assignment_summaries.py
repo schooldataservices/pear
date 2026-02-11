@@ -2,9 +2,9 @@ import pandas as pd
 from .transforming_assignment_responses import swap_student_ids
 
 def transform_assignment_summaries(df, client):
-    results = df[['assignment_name', 'assessment_id', 'total_points', 'max_points', 'submitted_date', 'studentsisid', 'status']]
+    results = df[['assignment_name', 'assessment_id', 'total_points', 'max_points', 'submitted_date', 'studentsisid', 'status']].copy()
 
-    results.loc[(results['status'] == 'GRADED')]
+    results = results.loc[(results['status'] == 'GRADED')]
     results['percent_score'] = (results['total_points'] / results['max_points'] * 100).round(2)
 
     results = swap_student_ids(results, 'studentsisid', client)
