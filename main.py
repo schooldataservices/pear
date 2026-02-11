@@ -43,16 +43,16 @@ def main(year):
     df_assignment_responses_raw = get_assignment_responses_call(username, password, assignment_id_list)
     df_ar_transformed = transform_assignment_responses(df_assignment_responses_raw, client)
     assignments_view = make_view_assignments(df_ar_transformed, year, client)
-    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_responses_raw, "pear_assignment_responses_raw.csv")
-    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_ar_transformed, "pear_assignment_responses.csv")
-    buckets.send_to_gcs('pearbucket-icefschools-1', "", assignments_view, "pear_assignment_responses_view.csv")
+    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_responses_raw, "pear_assignment_responses_raw.csv", project_id='icef-437920', dag_name='pear_processing_dag')
+    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_ar_transformed, "pear_assignment_responses.csv", project_id='icef-437920', dag_name='pear_processing_dag')
+    buckets.send_to_gcs('pearbucket-icefschools-1', "", assignments_view, "pear_assignment_responses_view.csv", project_id='icef-437920', dag_name='pear_processing_dag')
     # ---------------------------------------------------
 
     df_assignment_summaries_raw = get_assignment_summaries(assignment_id_list, username, password)
     df_assignment_summaries_transformed = transform_assignment_summaries(df_assignment_summaries_raw, client)
     summaries_view = make_view_summaries(df_assignment_summaries_transformed, year, client)
-    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_summaries_transformed, "pear_assignment_summaries.csv")
-    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_summaries_raw, "pear_assignment_summaries_raw.csv")
-    buckets.send_to_gcs('pearbucket-icefschools-1', "", summaries_view, "pear_assignment_summaries_view.csv")
+    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_summaries_transformed, "pear_assignment_summaries.csv", project_id='icef-437920', dag_name='pear_processing_dag')
+    buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_summaries_raw, "pear_assignment_summaries_raw.csv", project_id='icef-437920', dag_name='pear_processing_dag')
+    buckets.send_to_gcs('pearbucket-icefschools-1', "", summaries_view, "pear_assignment_summaries_view.csv", project_id='icef-437920', dag_name='pear_processing_dag')
 
 main(year='25-26')
