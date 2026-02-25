@@ -30,6 +30,25 @@ def categorize_curriculum(name: str, assessment_id: str = None) -> str:
     return "Other"
 
 
+# Middle school (6, 7, 8): treat "Other" as Math, except 8th grade science interims → Science
+MIDDLE_SCHOOL_GRADES = (6, 7, 8)
+
+
+def apply_middle_school_curriculum(df: pd.DataFrame) -> pd.DataFrame:
+    """Where curriculum is Other and grade is 6/7/8, set to Math; except 8th grade science interim → Science."""
+    grade_num = pd.to_numeric(df["grade"], errors="coerce")
+    other = df["curriculum"] == "Other"
+    ms = grade_num.isin([6.0, 7.0, 8.0])
+    title_lower = df["title"].astype(str).str.lower()
+    # Exception: grade 8 + science + interim (e.g. 8th Grade Science Interim #1) → Science
+    eighth_science_interim = (grade_num == 8) & title_lower.str.contains("science", na=False) & title_lower.str.contains("interim", na=False)
+
+    df = df.copy()
+    df.loc[other & ms & eighth_science_interim, "curriculum"] = "Science"
+    df.loc[other & ms & ~eighth_science_interim, "curriculum"] = "Math"
+    return df
+
+
 def extract_unit(name: str, assessment_id: str = None):
     # Check assessment_id override first
     if assessment_id and assessment_id in assessment_overrides:
@@ -58,6 +77,25 @@ def get_performance_band(score):
         return 1, "Does Not Meet Expectations"
 
 
+def drop_null_local_student_ids_or_grade(df: pd.DataFrame, log_prefix: str = "view") -> pd.DataFrame:
+    """Drop rows with null/invalid local_student_id or null grade (e.g. not in 25-26 roster). Log counts."""
+    null_id_mask = (
+        df["local_student_id"].isna()
+        | (df["local_student_id"].astype(str).str.strip() == "")
+        | (df["local_student_id"].astype(str).str.strip().str.lower() == "nan")
+    )
+    null_grade_mask = df["grade"].isna()
+    to_drop = null_id_mask | null_grade_mask
+    n_dropped = to_drop.sum()
+    if n_dropped > 0:
+        n_bad_id = null_id_mask.sum()
+        n_null_grade = null_grade_mask.sum()
+        logging.info(
+            f"[{log_prefix}] Dropped {n_dropped} rows: {n_bad_id} with null/invalid local_student_id, "
+            f"{n_null_grade} with null grade (no match in 25-26 roster, e.g. ID from pq_StudentDemos but not in student_to_teacher)."
+        )
+        return df[~to_drop].copy()
+    return df
 
 
 def make_view_summaries(df, year, client):
@@ -82,6 +120,11 @@ def make_view_summaries(df, year, client):
                     'assignment_name': 'title',
                     'percent_score': 'score'}, inplace=True)
 
+    # Log why grade might be null: no match for local_student_id (see swap_student_ids logs for raw vs unmapped)
+    null_local = df['local_student_id'].isna().sum()
+    nan_str = (df['local_student_id'].astype(str).str.strip() == 'nan').sum()
+    logging.info(f"[Summaries view] Rows with null local_student_id before grade merge: {null_local} (incl. {nan_str} 'nan' string). These get null grade. See '[studentsisid]' logs for breakdown: missing in raw PEAR vs not found in PowerSchool.")
+
     query = """
     SELECT student_number as local_student_id,
     grade_level as grade
@@ -94,6 +137,8 @@ def make_view_summaries(df, year, client):
     df['local_student_id'] = df['local_student_id'].astype(str)
 
     df = pd.merge(df, temp, on='local_student_id', how='left')
+    df = drop_null_local_student_ids_or_grade(df, log_prefix="Summaries view") #necessary to drop students that are not in most recent student_to_teacher table
+    df = apply_middle_school_curriculum(df)
 
     df = df[['data_source', 'assessment_id', 'year', 'date_taken', 'grade', 'local_student_id', 'test_type', 'curriculum', 'unit', 'title', 'standard_code', 'score', 'performance_band_level', 'performance_band_label', 'proficiency']]
 
@@ -138,13 +183,16 @@ def make_view_assignments(df, year, client):
     logging.info(f"Before merge: {len(df)} rows, {df['local_student_id'].nunique()} unique local_student_ids")
     logging.info(f"Grade lookup table: {len(temp)} rows, {temp['local_student_id'].nunique()} unique local_student_ids")
     
-    # Check for nulls before merge
+    # Log why grade might be null: no match for local_student_id (see swap_student_ids logs for raw vs unmapped)
     null_ids_before = df['local_student_id'].isna().sum()
+    nan_str = (df['local_student_id'].astype(str).str.strip() == 'nan').sum()
     if null_ids_before > 0:
-        logging.warning(f"{null_ids_before} rows have null local_student_id before merge")
+        logging.warning(f"[Assignments view] Rows with null local_student_id before grade merge: {null_ids_before} (incl. {nan_str} 'nan' string). These get null grade. See '[student_sis_id]' logs for breakdown: missing in raw PEAR vs not found in PowerSchool.")
 
     df = pd.merge(df, temp, on='local_student_id', how='left')
-    
+    df = drop_null_local_student_ids_or_grade(df, log_prefix="Assignments view") #necessary to drop students that are not in most recent student_to_teacher table
+    df = apply_middle_school_curriculum(df)
+
     # Log merge results
     matched_count = df['grade'].notna().sum()
     unmatched_count = df['grade'].isna().sum()

@@ -37,8 +37,16 @@ def main(year):
     assignment_id_list = df.assignment_id.to_list() + [
     '68c0991821a3b97a63808f7a',
     '689bb78d965cf7826eb6444d',
-    '68e5793913c3d26b49c17750'
+    '68e5793913c3d26b49c17750',
+    '6012eac831d9b500078e5b9e',
+    '60411f8af61767000862a9ab',
+    '606c6da4d2589a000868a7ff',
+    '65eb39c8b54b1d4f2d92a497',
+    '67f66e1371cc367444d72a4a',
+    '697a7cb021a5d4e7a3020717'
     ] #assignments that are missing from Pears assignment-list endpoint because they do not have standards attached.
+    
+    logging.info(f'Total assignments to process (including {len(assignment_id_list) - len(df)} hardcoded IDs): {len(assignment_id_list)}')
 
     df_assignment_responses_raw = get_assignment_responses_call(username, password, assignment_id_list)
     df_ar_transformed = transform_assignment_responses(df_assignment_responses_raw, client)

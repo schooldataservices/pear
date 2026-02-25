@@ -3,3 +3,4 @@
 __pycache__/
 *.ipynb
 notes.md
+output_files/

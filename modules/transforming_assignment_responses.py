@@ -5,6 +5,14 @@ import logging
 import pandas as pd
 
 def transform_assignment_responses(df, client):
+    # Log raw PEAR data: how many rows have no student ID (before any pipeline logic)
+    if 'student_sis_id' in df.columns:
+        raw_null_student = df['student_sis_id'].isna().sum()
+        raw_empty_student = (df['student_sis_id'].astype(str).str.strip() == '').sum()
+        logging.info(f"[Assignment responses] Raw data from PEAR: {len(df)} rows, {raw_null_student} with null student_sis_id, {raw_empty_student} with empty student_sis_id")
+    else:
+        logging.warning("[Assignment responses] Raw PEAR data has no 'student_sis_id' column")
+
     # Track the three special assignments
     special_assignment_ids = ['68c0991821a3b97a63808f7a', '689bb78d965cf7826eb6444d', '68e5793913c3d26b49c17750']
     
@@ -27,7 +35,7 @@ def transform_assignment_responses(df, client):
     logging.info(f"Total rows before filtering: {initial_count}")
     
     temp = temp.loc[(temp['grading_status'] == 'GRADED') & (temp['test_type'].isin(['school common assessment', 'common assessment']))]
-    
+
     # Log counts after filtering
     filtered_count = len(temp)
     logging.info(f"Total rows after filtering (GRADED + common assessment): {filtered_count}")
@@ -77,7 +85,12 @@ def transform_assignment_responses(df, client):
 def swap_student_ids(df, mapping_column, client):
   # Make a copy to avoid SettingWithCopyWarning
   df = df.copy()
-  
+
+  # Count null/missing in source BEFORE any conversion (so we know "PEAR sent no ID" vs "ID not in PowerSchool")
+  null_in_source = df[mapping_column].isna().sum()
+  empty_in_source = (df[mapping_column].astype(str).str.strip().isin(['', 'nan'])).sum()
+  logging.info(f"[{mapping_column}] Before mapping: {null_in_source} null in source data, {empty_in_source} empty/nan string in source")
+
   #Set to string to map values properly 
   df[mapping_column] = df[mapping_column].astype(str)
   
@@ -86,14 +99,11 @@ def swap_student_ids(df, mapping_column, client):
   sample_ids = df[mapping_column].unique()[:5] if len(df) > 0 else []
   logging.info(f"Mapping {unique_before} unique {mapping_column} values. Sample IDs: {sample_ids}")
 
+  # Latest row per student across all partitions (so students not in max partition still map)
   query = """
-  WITH MaxPartition_Demos AS (
-    SELECT MAX(partitiontime) AS max_partitiontime
-    FROM `icef-437920.powerschool.pq_StudentDemos`
-  )
-  SELECT id, student_number 
-  FROM `icef-437920.powerschool.pq_StudentDemos` 
-  WHERE partitiontime = (SELECT max_partitiontime FROM MaxPartition_Demos);
+  SELECT id, student_number
+  FROM `icef-437920.powerschool.pq_StudentDemos`
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY partitiontime DESC) = 1;
   """
 
   student_demos_df = client.query(query).to_dataframe()
@@ -103,16 +113,19 @@ def swap_student_ids(df, mapping_column, client):
 
   # Store original values for logging
   original_values = df[mapping_column].copy()
-  
+
   df[mapping_column] = df[mapping_column].map(mapping_dict)
   
-  # Log mapping results
+  # Log mapping results and null breakdown: from raw (no ID from PEAR) vs from unmapped (ID not in PowerSchool)
   mapped_count = df[mapping_column].notna().sum()
-  unmapped_count = df[mapping_column].isna().sum()
+  total_null_after = df[mapping_column].isna().sum()
   unique_after = df[mapping_column].nunique()
-  logging.info(f"Mapping results: {mapped_count} mapped, {unmapped_count} unmapped (NaN), {unique_after} unique values after mapping")
+  # After .map(): nulls are (1) original null/empty that became 'nan' and didn't match, or (2) ID not in mapping_dict
+  null_from_source_approx = min(null_in_source + empty_in_source, total_null_after)
+  null_from_unmapped_approx = total_null_after - null_from_source_approx
+  logging.info(f"Mapping results: {mapped_count} mapped, {total_null_after} total null after mapping -> ~{null_from_source_approx} from missing/empty ID in raw data, ~{null_from_unmapped_approx} from ID not found in PowerSchool pq_StudentDemos")
   
-  if unmapped_count > 0:
+  if total_null_after > 0:
     unmapped_original_ids = sorted(original_values[df[mapping_column].isna()].unique())
     logging.warning(f"All unmapped student IDs ({len(unmapped_original_ids)} unique): {unmapped_original_ids}")
 
