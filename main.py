@@ -11,7 +11,7 @@ from modules.create_main_views import *
 import logging
 import sys
 import time
-from gcp_utils_sds import buckets
+from gcp_utils_sds import buckets, append_assessment_titles
 import pandas as pd
 from google.cloud import bigquery
 pd.set_option('display.max_columns', None)  # Show all columns when printing DataFrames
@@ -49,6 +49,15 @@ def main(year):
     logging.info(f'Total assignments to process (including {len(assignment_id_list) - len(df)} hardcoded IDs): {len(assignment_id_list)}')
 
     df_assignment_responses_raw = get_assignment_responses_call(username, password, assignment_id_list)
+    if df_assignment_responses_raw is not None and not df_assignment_responses_raw.empty:
+        append_assessment_titles(
+            frame=df_assignment_responses_raw,
+            project_id="icef-437920",
+            data_source="pear",
+            column_map={"title": "assignment_name"},
+            year=year,
+            batch_id=f"pear_assignment_responses_{int(time.time())}",
+        )
     df_ar_transformed = transform_assignment_responses(df_assignment_responses_raw, client)
     assignments_view = make_view_assignments(df_ar_transformed, year, client)
     buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_responses_raw, "pear_assignment_responses_raw.csv", project_id='icef-437920', dag_name='pear_processing_dag')
@@ -57,6 +66,15 @@ def main(year):
     # ---------------------------------------------------
 
     df_assignment_summaries_raw = get_assignment_summaries(assignment_id_list, username, password)
+    if df_assignment_summaries_raw is not None and not df_assignment_summaries_raw.empty:
+        append_assessment_titles(
+            frame=df_assignment_summaries_raw,
+            project_id="icef-437920",
+            data_source="pear",
+            column_map={"title": "assignment_name"},
+            year=year,
+            batch_id=f"pear_assignment_summaries_{int(time.time())}",
+        )
     df_assignment_summaries_transformed = transform_assignment_summaries(df_assignment_summaries_raw, client)
     summaries_view = make_view_summaries(df_assignment_summaries_transformed, year, client)
     buckets.send_to_gcs('pearbucket-icefschools-1', "", df_assignment_summaries_transformed, "pear_assignment_summaries.csv", project_id='icef-437920', dag_name='pear_processing_dag')

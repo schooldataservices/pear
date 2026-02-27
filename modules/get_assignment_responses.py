@@ -36,11 +36,15 @@ def get_assignment_responses_call(username: str, password: str, a_id_list: list,
                     df = pd.json_normalize(data)
                 else:
                     df = pd.DataFrame(data)
-                df["assignment_id"] = assignment_id
-                all_dataframes.append(df)
-                print(f"✅ Collected data for {assignment_id} ({idx}/{len(a_id_list)})")
-            except Exception as e:
-                print(f"⚠️ Failed to parse JSON for {assignment_id}: {e}")
+                if df.empty:
+                    print(f"ℹ️ No student responses available for {assignment_id} ({idx}/{len(a_id_list)})")
+                else:
+                    df["assignment_id"] = assignment_id
+                    all_dataframes.append(df)
+                    print(f"✅ Collected data for {assignment_id} ({idx}/{len(a_id_list)})")
+            except Exception:
+                # Edulastic sometimes returns an empty body or non‑JSON when there are no responses
+                print(f"ℹ️ No student responses available for {assignment_id} ({idx}/{len(a_id_list)})")
         else:
             print(f"⚠️ No data returned for {assignment_id}")
 
